@@ -22,9 +22,19 @@ async def settings(mes: aiogram.types.Message):
 async def support(mes: aiogram.types.Message):
     await mes.answer("My")
 
-#@dp.message(Command("start"))
-#async def start(mes: aiogram.types.Message, command):
-#    await mes.answer("Hi" + str(command.args))
+@dp.message(Command("start"))
+async def start(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot):
+    if not await db["user"].count_documents({ "id": mes.from_user.id }):
+        await db["user"].insert_one({
+            "id": mes.from_user.id,
+            "username": mes.from_user.username,
+            "name": mes.from_user.username
+        })
+    if not await db["user"].count_documents({}):
+        await db["user"].create_index({"id": 1 }, { "unique": True })
+        await db["user"].create_index({"name": 1 }, { "unique": True })
+    if command.args:
+        await enter_queue(mes, command, db, bot)
 
 @dp.message(Command("create_queue"))
 async def create_queue(mes: aiogram.types.Message, db: AsyncIOMotorClient, command):
@@ -60,16 +70,23 @@ async def enter_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClien
 
 
 @dp.message(Command("get_queue_info"))
-async def enter_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
+async def get_queue_info(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
     queue = await db["queue"].find_one({ "_id": ObjectId(command.args)})
+    
+    listt2 = []
+    for i in queue["times_2_users"].values():
+        user = await db.user.find_one({ "id": i })
+        user = user["name"] if user and "name" in user else i
+        listt2.append(user)
+
     await mes.answer(f"""Очедь {queue["name"]}
 Время создания: {queue["time"]}
 Создатель: {queue["creator_user_id"]}
-""" + "\n".join([f"{i}. {v}" for i, v in enumerate(queue["times_2_users"].values())]) )
+""" + "\n".join([f"{i}. {v}" for i, v in enumerate(listt2)]) )
 
 
 @dp.message(Command("shuffle_queue"))
-async def enter_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
+async def shuffle_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
     queue = await db["queue"].find_one({ "_id": ObjectId(command.args)})
     users = list(queue["times_2_users"].values())
     random.shuffle(users)
@@ -80,12 +97,19 @@ async def enter_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClien
 
 
 @dp.message(Command("get_queue"))
-async def enter_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
+async def get_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
     queue = await db["queue"].find_one({ "_id": ObjectId(command.args)})
-    if queue.get("list"):
-        await mes.answer(f"\n".join([f"{i}. {v}" for i, v in enumerate(queue["list"])]) )
-    else:
-        await mes.answer(f"\n".join([f"{i}. {v}" for i, v in enumerate(queue["times_2_users"].values())]) )
+    listt = queue["list"] if queue.get("list") else queue["times_2_users"].values()
+    listt2 = []
+    for i in listt:
+        user = await db.user.find_one({ "id": i })
+        user = user["name"] if user and "name" in user else i
+        listt2.append(user)
+    await mes.answer(f"\n".join([f"{i}. {v}" for i, v in enumerate(listt2)]) )
 
+
+@dp.message(Command("set_my_name"))
+async def set_my_name(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
+    await db["user"].update_one({ "id": mes.from_user.id }, { "$set": { "name": command.args or mes.from_user.username }  } )
 
 
