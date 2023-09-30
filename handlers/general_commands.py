@@ -7,6 +7,10 @@ from aiogram import F
 from aiogram.filters import Command
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from bson import ObjectId
+from aiogram.fsm.context import FSMContext
+
+from keyboards import get_null_answer_keyboard
+from states import MainStatesGroup
 
 dp = aiogram.Router()
 
@@ -23,7 +27,10 @@ async def support(mes: aiogram.types.Message):
     await mes.answer("My")
 
 @dp.message(Command("start"))
-async def start(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot):
+async def start(mes: aiogram.types.Message, state: FSMContext, command, db: AsyncIOMotorClient, bot):
+    await mes.answer("Привет! Как тебя зовут?", reply_markup=get_null_answer_keyboard())
+    await state.clear()
+    await state.set_state(MainStatesGroup.user_name)
     if not await db["user"].count_documents({ "id": mes.from_user.id }):
         await db["user"].insert_one({
             "id": mes.from_user.id,
@@ -39,14 +46,17 @@ async def start(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot
 @dp.message(Command("create_queue"))
 async def create_queue(mes: aiogram.types.Message, db: AsyncIOMotorClient, command):
     timee = str(time.time())
+    name = command.args if command.args and command.args.strip() != "-" else  timee
     result = await db["queue"].insert_one({
         "time": timee,
-        "name": command.args if command.args else f"{timee}",
+        "name": name,
         "creator_user_id": mes.from_user.id,
         "times_2_users": { timee: mes.from_user.id }
     })
-    invite = f"/enter_queue {str(result.inserted_id)}"
-    await mes.answer(invite)
+    await mes.answer(f"Создана очередь {name} c id: ")
+    await mes.answer(f"{result.inserted_id}")
+    #await mes.answer(f"/enter_queue {str(result.inserted_id)}")
+    return result.inserted_id
 
 
 @dp.message(Command("enter_queue"))
@@ -110,6 +120,7 @@ async def get_queue(mes: aiogram.types.Message, command, db: AsyncIOMotorClient,
 
 @dp.message(Command("set_my_name"))
 async def set_my_name(mes: aiogram.types.Message, command, db: AsyncIOMotorClient, bot: aiogram.Bot):
-    await db["user"].update_one({ "id": mes.from_user.id }, { "$set": { "name": command.args or mes.from_user.username }  } )
-
+    name = command.args if command.args and command.args.strip() != "-" else  mes.from_user.username
+    await db["user"].update_one({ "id": mes.from_user.id }, { "$set": { "name": name  }  } )
+    await mes.answer(f"Привет, {name}!", reply_markup=None)
 

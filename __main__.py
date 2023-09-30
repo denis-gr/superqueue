@@ -9,7 +9,7 @@ def load_env(filename="settings.env"):
     with open(filename) as f:
         env = [s.split("=") for s in f.readlines()]
     for key, value in env:
-        os.environ[key.strip()] = value.strip()
+        os.environ[key.strip()] = os.environ.get(key.strip(), value.strip())
 
 
 if __name__ == "__main__":

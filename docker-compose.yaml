@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  bot:
+    restart: always
+    build: .
+    depends_on:
+      - mongo
+    env_file:
+      - settings.env
+    volumes:
+      - data:/data/
+  mongo:
+    image: mongo
+    volumes:
+      - mongo:/data/db
+    ports:
+      - 27018:27017 # For test and access to db from host
+volumes:
+  data:
+  mongo:
